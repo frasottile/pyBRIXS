@@ -1,6 +1,7 @@
 import numpy as np
 import h5py
 from scipy.interpolate import griddata
+import scipy.constants
 
 class analysis:
     """
@@ -45,20 +46,20 @@ class analysis:
             2D array of the interpolated RIXS cross section on (xe,y)-grid
     """
 
-    def __init__(self, rixs, w_core, grid, method='linear', fill_value=0,\
-            rescale=False):
-
+    def __init__(self, rixs, w_core, grid=np.array([]), method='linear',\
+            fill_value=0, rescale=False):
         self.w_core=w_core
-        self.grid=grid
-        self.method=method
-        self.fill_value=fill_value
-        self.rescale=rescale
-        self.xl=np.linspace(min(rixs.w),max(rixs.w),num=grid[0])
-        self.xe=np.linspace(min(self.w_core)-max(rixs.w),\
-                max(self.w_core)-min(rixs.w),grid[0])
-        self.y=np.linspace(min(self.w_core),max(self.w_core),num=grid[1])
-        #interpolate data
-        self.__interpolate_data__(rixs)
+        if grid.shape[0] != 0:
+            self.grid=grid
+            self.method=method
+            self.fill_value=fill_value
+            self.rescale=rescale
+            self.xl=np.linspace(min(rixs.w),max(rixs.w),num=grid[0])
+            self.xe=np.linspace(min(self.w_core)-max(rixs.w),\
+                    max(self.w_core)-min(rixs.w),grid[0])
+            self.y=np.linspace(min(self.w_core),max(self.w_core),num=grid[1])
+            #interpolate data
+            self.__interpolate_data__(rixs)
 
     def __interpolate_data__(self,rixs):
         points_loss=np.zeros((rixs.w.shape[0]*self.w_core.shape[0],2))
@@ -82,6 +83,29 @@ class analysis:
         self.ze=griddata(points_em, z, (self.xe[None,:], self.y[:,None]),\
                 method=self.method, fill_value=self.fill_value, \
                 rescale=self.rescale)
+    
+    def export(self,rixs,w_core,filepath):
+        np.savez_compressed(filepath, xl=self.xl, xe=self.xe, zl=self.zl,\
+                ze=self.ze, w=rixs.w, spectrum=rixs.spectrum, y=self.y,\
+                w_emission=rixs.w_emission, w_core=w_core, grid=self.grid)
+    
+    @staticmethod
+    def from_file(filepath):
+        data_=np.load(filepath)
+        rixs_=rixs()
+        visual_=analysis(rixs=rixs_,w_core=data_['w_core'])
+        visual_.xl=data_['xl']
+        visual_.xe=data_['xe']
+        visual_.y=data_['y']
+        visual_.zl=data_['zl']
+        visual_.ze=data_['ze']
+        visual_.grid=data_['grid']
+        rixs_.w=data_['w']
+        rixs_.spectrum=data_['spectrum']
+        rixs_.w_emission=data_['w_emission']
+
+        return rixs_, visual_
+
 class rixs:
     """
         Object to store output of BRIXS calculation and to generate RIXS spectra
@@ -119,7 +143,7 @@ class rixs:
             self.file=file
             self.broad=broad
             self.__get_oscstr__()
-        if freq.shape != 0:
+        if freq.shape[0] != 0:
             self.w=freq
             self.set_spectrum()
             self.gen_spectrum()
@@ -144,12 +168,13 @@ class rixs:
     def set_spectrum(self):
         #create matrix to hold Lorenztian broadening with broadening of
         #self.broad
+        hartree=scipy.constants.physical_constants['Hartree energy in eV'][0]
         self.delta_e=np.zeros((self.w.shape[0],self.oscstr.shape[1]),\
                 dtype=np.complex64)
         for i in range(self.delta_e.shape[0]):
             for j in range(self.delta_e.shape[1]):
-                self.delta_e[i,j]=1.0/(self.w[i]/27.211-self.energy[j]\
-                        +1j*self.broad)
+                self.delta_e[i,j]=1.0/(self.w[i]/hartree-self.energy[j]\
+                        +1j*self.broad/hartree)
     
     def gen_spectrum(self):
         self.spectrum=np.zeros((self.oscstr.shape[0],self.w.shape[0]))

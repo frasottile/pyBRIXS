@@ -1,0 +1,4 @@
+# python intermediate files
+*.egg-info/
+__pycache__/
+
