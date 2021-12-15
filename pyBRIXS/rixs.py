@@ -151,7 +151,7 @@ class rixs:
 
     def __get_oscstr__(self):
         with h5py.File(self.file) as f:
-            self.energy=np.asarray(list(f['evals']))
+            self.energy=np.asarray(list(f['vevals']))
             nfreq=len(list(f['oscstr']))
             self.oscstr=[]
             for i in range(nfreq):
